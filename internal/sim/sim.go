@@ -202,6 +202,7 @@ func Simulate(cfg SimConfig) *SimResult {
 					Arrival:  arrs[j].t,
 					Complete: ev.t + svc[j],
 					Failed:   failed[j],
+					Service:  svc[j],
 				}
 				heap = pushEvent(heap, completionEvent{t: ev.t + svc[j], seq: j, order: order})
 				order++
