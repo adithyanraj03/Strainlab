@@ -1,11 +1,15 @@
 // strainlab — a seeded, reproducible HTTP load tester.
 //
-// The SIMULATION (demo/simulate) runs on a virtual clock with a seeded
-// request stream — the result is a pure function of the config, so the
-// table is byte-identical on every run.
+// Two instruments, one rule:
 //
-// stdlib only: no goroutine-scheduling tricks in the results, no network
-// in the test suite.
+//   - the SIMULATION (demo/simulate/report) runs on a virtual clock with a
+//     seeded request stream — the result is a pure function of the config,
+//     so the report is byte-identical on every run;
+//   - the PROBE (serve/run) is a real HTTP target and a real load client,
+//     clearly labelled as measured rather than seeded.
+//
+// stdlib only: no modules, no goroutine-scheduling tricks in the results,
+// no network in the test suite.
 package main
 
 import (
@@ -14,7 +18,10 @@ import (
 	"os"
 	"strings"
 
+	"strainlab/internal/report"
+	"strainlab/internal/run"
 	"strainlab/internal/sim"
+	"strainlab/internal/target"
 )
 
 const version = "1.0.0"
@@ -31,6 +38,8 @@ func main() {
 		runDemo(args, false)
 	case "simulate":
 		runSimulate(args)
+	case "report":
+		runReport(args)
 	case "version", "--version", "-v":
 		fmt.Printf("strainlab v%s\n", version)
 	case "help", "--help", "-h":
@@ -48,6 +57,7 @@ func usageText() string {
 usage:
   strainlab demo      the standard simulation, printed as a table
   strainlab simulate  the standard simulation (same as demo)
+  strainlab report    render the standard simulation as an HTML report
   strainlab help      this text
   strainlab version
 
@@ -141,6 +151,19 @@ func runDemo(args []string, quiet bool) {
 
 func runSimulate(args []string) {
 	runDemo(args, false)
+}
+
+func runReport(args []string) {
+	fs := flag.NewFlagSet("report", flag.ExitOnError)
+	f := simFlagSet(fs)
+	fs.Parse(args)
+	res := sim.Simulate(f.Config())
+	html := report.RenderReport(res)
+	if err := os.WriteFile(f.out, []byte(html), 0o644); err != nil {
+		fmt.Fprintln(os.Stderr, "write:", err)
+		os.Exit(1)
+	}
+	fmt.Printf("report written to %s (%d bytes)\n", f.out, len(html))
 }
 
 // ---- output ----------------------------------------------------------------
