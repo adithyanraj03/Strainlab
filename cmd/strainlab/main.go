@@ -40,6 +40,8 @@ func main() {
 		runSimulate(args)
 	case "report":
 		runReport(args)
+	case "serve":
+		runServe(args)
 	case "version", "--version", "-v":
 		fmt.Printf("strainlab v%s\n", version)
 	case "help", "--help", "-h":
@@ -58,6 +60,7 @@ usage:
   strainlab demo      the standard simulation, printed as a table
   strainlab simulate  the standard simulation (same as demo)
   strainlab report    render the standard simulation as an HTML report
+  strainlab serve     run the deterministic offline HTTP target
   strainlab help      this text
   strainlab version
 
@@ -73,6 +76,11 @@ deterministic simulation flags (simulate), standard defaults shown:
   --ramp-ticks 300 / --ramp-rate 12
   --sustain-ticks 1500 / --sustain-rate 12
   --soak-ticks 1000 / --soak-rate 3
+
+offline target (serve):
+  --listen string   listen address (default 127.0.0.1:8765)
+  --seed int        target seed (default 7)
+  --base string     base service duration (default 120ms)
 `
 }
 
@@ -164,6 +172,25 @@ func runReport(args []string) {
 		os.Exit(1)
 	}
 	fmt.Printf("report written to %s (%d bytes)\n", f.out, len(html))
+}
+
+// ---- offline target ------------------------------------------------------
+
+func runServe(args []string) {
+	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	listen := fs.String("listen", "127.0.0.1:8765", "listen address")
+	seed := fs.Int64("seed", 7, "target seed")
+	base := fs.String("base", "120ms", "base service duration")
+	fs.Parse(args)
+	t := target.NewTargetServer(*seed)
+	t.Base = target.ParseDuration(*base)
+	fmt.Printf("strainlab v%s target listening on http://%s\n", version, target.ParseAddr(*listen))
+	fmt.Printf("  GET /load     deterministic work (seed %d)\n", *seed)
+	fmt.Printf("  GET /healthz  liveness\n")
+	if err := t.Serve(*listen); err != nil {
+		fmt.Fprintln(os.Stderr, "serve:", err)
+		os.Exit(1)
+	}
 }
 
 // ---- output ----------------------------------------------------------------
