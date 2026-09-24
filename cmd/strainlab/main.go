@@ -56,7 +56,8 @@ func main() {
 }
 
 func usageText() string {
-	return `strainlab v` + version + ` — seeded, reproducible HTTP load tester
+	d := sim.DemoConfig()
+	return fmt.Sprintf(`strainlab v%s — seeded, reproducible HTTP load tester
 
 usage:
   strainlab demo      the standard simulation, printed as a table
@@ -67,18 +68,19 @@ usage:
   strainlab help      this text
   strainlab version
 
-deterministic simulation flags (simulate), standard defaults shown:
-  --seed 7          PRNG seed
-  --tick 0.01       virtual seconds per tick
-  --servers 2       identical service workers
-  --base 0.10       base service time (s)
-  --jitter 0.5      multiplicative jitter on service time
-  --err 0.01        error rate 0..1
-  --spike-every 40  every Nth request is a slow spike (0 = off)
-  --spike-mul 10    spike service-time multiplier
-  --ramp-ticks 300 / --ramp-rate 12
-  --sustain-ticks 1500 / --sustain-rate 12
-  --soak-ticks 1000 / --soak-rate 3
+deterministic simulation flags (simulate/report), standard defaults shown:
+  --seed %d        PRNG seed
+  --tick %v       virtual seconds per tick
+  --servers %d     identical service workers
+  --base %v       base service time (s)
+  --jitter %v     multiplicative jitter on service time
+  --err %v        error rate 0..1
+  --spike-every %d every Nth request is a slow spike (0 = off)
+  --spike-mul %v  spike service-time multiplier
+  --ramp-ticks %d / --ramp-rate %v
+  --sustain-ticks %d / --sustain-rate %v
+  --soak-ticks %d / --soak-rate %v
+  --out string      report output path (default report.html)
 
 offline target (serve):
   --listen string   listen address (default 127.0.0.1:8765)
@@ -91,7 +93,13 @@ real probe (run):
   --secs float      duration in seconds (default 10)
   --workers int     worker goroutines (default 8)
   --out string      JSONL sample output (default results.jsonl)
-`
+`,
+		version,
+		d.Seed, d.Tick, d.Servers, d.Base, d.Jitter, d.ErrorRate,
+		d.SpikeEvery, d.SpikeMul,
+		d.Phases[0].Ticks, d.Phases[0].Rate,
+		d.Phases[1].Ticks, d.Phases[1].Rate,
+		d.Phases[2].Ticks, d.Phases[2].Rate)
 }
 
 func usage() {
