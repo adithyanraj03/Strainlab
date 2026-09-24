@@ -42,6 +42,8 @@ func main() {
 		runReport(args)
 	case "serve":
 		runServe(args)
+	case "run":
+		runProbe(args)
 	case "version", "--version", "-v":
 		fmt.Printf("strainlab v%s\n", version)
 	case "help", "--help", "-h":
@@ -61,6 +63,7 @@ usage:
   strainlab simulate  the standard simulation (same as demo)
   strainlab report    render the standard simulation as an HTML report
   strainlab serve     run the deterministic offline HTTP target
+  strainlab run       probe a real endpoint with measured (non-seeded) load
   strainlab help      this text
   strainlab version
 
@@ -81,6 +84,13 @@ offline target (serve):
   --listen string   listen address (default 127.0.0.1:8765)
   --seed int        target seed (default 7)
   --base string     base service duration (default 120ms)
+
+real probe (run):
+  --url string      endpoint to load (required)
+  --rps float       target request rate (default 20)
+  --secs float      duration in seconds (default 10)
+  --workers int     worker goroutines (default 8)
+  --out string      JSONL sample output (default results.jsonl)
 `
 }
 
@@ -193,6 +203,35 @@ func runServe(args []string) {
 	}
 }
 
+// ---- real probe -----------------------------------------------------------
+
+func runProbe(args []string) {
+	fs := flag.NewFlagSet("run", flag.ExitOnError)
+	url := fs.String("url", "", "endpoint to load (required)")
+	rps := fs.Float64("rps", 20, "target request rate")
+	secs := fs.Float64("secs", 10, "duration (s)")
+	workers := fs.Int("workers", 8, "worker goroutines")
+	out := fs.String("out", "results.jsonl", "JSONL sample output")
+	fs.Parse(args)
+	if *url == "" {
+		fmt.Fprintln(os.Stderr, "run: --url is required")
+		os.Exit(2)
+	}
+	fmt.Printf("strainlab v%s · probing %s at %.1f req/s for %.1f s (MEASURED, not seeded)\n",
+		version, *url, *rps, *secs)
+	res, err := run.RunHTTP(*url, *rps, *secs, *workers)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "run:", err)
+		os.Exit(1)
+	}
+	printRunSummary(res)
+	if err := res.WriteJSONL(*out); err != nil {
+		fmt.Fprintln(os.Stderr, "jsonl:", err)
+		os.Exit(1)
+	}
+	fmt.Printf("samples written to %s\n", *out)
+}
+
 // ---- output ----------------------------------------------------------------
 
 func printSimTable(r *sim.SimResult) {
@@ -216,6 +255,19 @@ func printSimTable(r *sim.SimResult) {
 	fmt.Println(strings.Repeat("─", 78))
 	fmt.Printf("overall: %d req · %d err · mean %s · p50 %s · p95 %s · p99 %s · max %s\n",
 		o.Count, o.Errors, fmtLat(o.Mean), fmtLat(o.P50), fmtLat(o.P95), fmtLat(o.P99), fmtLat(o.Max))
+}
+
+func printRunSummary(r *run.RunResult) {
+	s := r.Stats
+	eff := 0.0
+	if r.Duration > 0 {
+		eff = float64(r.Total) / r.Duration
+	}
+	fmt.Println(strings.Repeat("─", 78))
+	fmt.Printf("measured: %d req in %.2f s (%.1f req/s effective) · %d errors\n",
+		r.Total, r.Duration, eff, r.Errors)
+	fmt.Printf("latency:  mean %s · p50 %s · p95 %s · p99 %s · min %s · max %s\n",
+		fmtLat(s.Mean), fmtLat(s.P50), fmtLat(s.P95), fmtLat(s.P99), fmtLat(s.Min), fmtLat(s.Max))
 }
 
 // fmtLat renders seconds for the fixed-width terminal table.
